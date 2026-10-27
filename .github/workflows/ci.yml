@@ -1,0 +1,35 @@
+name: CI
+
+# run GitHub actions when push or PR, auto test
+on:
+  push:
+  pull_request:
+
+# only give read access
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest # "runner"/VM like in Opsys haha
+
+    steps:
+      # download repo code
+      - name: Check out code
+        uses: actions/checkout@v7 # uses for predefined Github actions kinda like "git clone <repository-url>"
+
+      # install/configure python
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      #install dependencies from requirements.txt
+      - name: Install dependencies
+        run: | # run for terminal commands
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      # run pytest tests!
+      - name: Run tests
+        run: python -m pytest -v
