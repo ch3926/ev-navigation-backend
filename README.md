@@ -28,7 +28,7 @@ python -m pip install -r requirements.txt
 python -m uvicorn app.main:app --reload
 ```
 
-API documentation: http://127.0.0.1:8000/docs
+After starting the server, view the interactive API documentation at `http://127.0.0.1:8000/docs`
 
 Run tests locally using pytest:
 
