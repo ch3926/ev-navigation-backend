@@ -1,16 +1,20 @@
-name: CI
+# now runs pytests on push and PR
+# when passes when pushing to main, auto deploy to AWS Lambda
+# auto check health after
 
-# run GitHub actions when push or PR, auto test
+name: CI/CD
+
+# run GitHub Actions when push or PR, auto test
 on:
   push:
   pull_request:
 
-# only give read access
+# only give read access to repository contents
 permissions:
   contents: read
 
 jobs:
-  test:
+  test: # run pytests
     runs-on: ubuntu-latest # "runner"/VM like in Opsys haha
 
     steps:
@@ -24,7 +28,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      #install dependencies from requirements.txt
+      # install dependencies from requirements.txt
       - name: Install dependencies
         run: | # run for terminal commands
           python -m pip install --upgrade pip
@@ -33,3 +37,61 @@ jobs:
       # run pytest tests!
       - name: Run tests
         run: python -m pytest -v
+
+  deploy: # deploy the application to AWS Lambda after tests pass
+    needs: test # wait for test job to succeed first!
+
+    # only deploy when pushing to main, not on pull requests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    runs-on: ubuntu-latest
+
+    steps:
+      # download repo code
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      # install/configure python
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # install Lambda dependencies and copy app code into a package folder
+      - name: Build Lambda ZIP
+        run: | # GitHub actions VM will auto discard package/ and .zip after
+          mkdir package
+          python -m pip install -r requirements-lambda.txt --target package
+          cp -r app package/
+
+          # zip everything inside package, not the package folder itself
+          cd package
+          zip -qr ../lambda.zip .
+
+      # use AWS credentials stored in GitHub repository secrets
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
+
+      # upload the new ZIP to our existing Lambda function
+      - name: Deploy to Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name ev-navigation-backend \
+            --zip-file fileb://lambda.zip
+
+      # wait until AWS Lambda finishes updating
+      - name: Wait for Lambda update
+        run: |
+          aws lambda wait function-updated-v2 \
+            --function-name ev-navigation-backend
+
+      # verify that the live API still responds correctly
+      - name: Check deployed API
+        env:
+          API_URL: ${{ vars.API_URL }}
+        run: |
+          curl --fail --silent --show-error "$API_URL/health" | grep -q '"status":"ok"'
