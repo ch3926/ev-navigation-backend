@@ -1,7 +1,12 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from app.data import STATIONS
+from app.repository import (
+    StationRepositoryError,
+    get_station_by_id,
+    list_stations,
+)
 from app.services import find_reachable_stations
 
 
@@ -9,6 +14,7 @@ app = FastAPI(
     title="EV Charging Station API",
     version="1.0.0",
 )
+
 
 # defines what fields and types the client must send when POSTing
 class ReachableStationsRequest(BaseModel):
@@ -24,6 +30,20 @@ class ReachableStationsRequest(BaseModel):
         gt=0,
     )
 
+
+@app.exception_handler(StationRepositoryError)
+async def repository_error_handler(
+    request: Request,
+    exc: StationRepositoryError,
+):
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "Station data temporarily unavailable"
+        },
+    )
+
+
 # endpoints below! ------
 
 @app.get("/health") # check backend is up an running
@@ -33,17 +53,12 @@ def health():
 
 @app.get("/stations") # run the function that spits out the available stations
 def get_stations():
-    return STATIONS
+    return list_stations()
 
 
 @app.get("/stations/{station_id}")
 def get_station(station_id: int):
-    station = None
-
-    for s in STATIONS:
-        if s["id"] == station_id:
-            station = s
-            break
+    station = get_station_by_id(station_id)
 
     if station is None:
         raise HTTPException(
@@ -62,5 +77,5 @@ def reachable_stations(
         request.latitude,
         request.longitude,
         request.remaining_range_km,
-        STATIONS,
+        list_stations(),
     )
