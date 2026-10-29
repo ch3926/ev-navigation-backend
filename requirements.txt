@@ -3,3 +3,4 @@ uvicorn[standard]
 pytest
 httpx
 mangum
+boto3 # API for accessing DynamoDB
