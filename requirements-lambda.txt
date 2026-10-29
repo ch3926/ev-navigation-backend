@@ -1,2 +1,3 @@
 fastapi==0.128.8
 mangum==0.21.0
+boto3
